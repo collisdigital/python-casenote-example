@@ -3,7 +3,7 @@ name = "python-castnote-example"
 version = "0.1.0"
 description = "Hexagonal Architecture (Ports & Adapters) demo: NHS Case Notes Tracking API"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 license = { text = "MIT" }
 authors = [{ name = "Collis Digital" }]
 
@@ -36,7 +36,7 @@ packages = ["app"]
 # Tooling configuration
 # ---------------------------------------------------------------------------
 [tool.ruff]
-target-version = "py312"
+target-version = "py314"
 line-length = 100
 src = ["app", "tests"]
 

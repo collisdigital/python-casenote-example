@@ -4,7 +4,7 @@
 
 A reference **Case Notes Tracking** feature slice showing how to implement
 **Hexagonal Architecture (Ports & Adapters)** inside a single Python package
-using modern 2026 patterns: **Python 3.12+**, **FastAPI (async)**,
+using modern 2026 patterns: **Python 3.14+**, **FastAPI (async)**,
 **Pydantic v2**, **SQLAlchemy 2.0 + asyncpg**, and **`uv`** for dependency
 management.
 
