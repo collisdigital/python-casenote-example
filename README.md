@@ -12,6 +12,23 @@ management.
 > hospitals. This demo CRUD API tracks where each folder is, and lets you move
 > it (e.g. from *Medical Records Library* to *Ward 4*).
 
+## Tech Stack
+
+| Layer                     | Technology                                                          |
+| ------------------------- | ------------------------------------------------------------------- |
+| Language / runtime        | Python 3.14                                                         |
+| Web framework             | [FastAPI](https://fastapi.tiangolo.com/) (async/await)             |
+| ASGI server               | [Uvicorn](https://www.uvicorn.org/) (with `standard` extras)       |
+| Validation / serialisation| [Pydantic v2](https://docs.pydantic.dev/) + pydantic-settings      |
+| ORM / data toolkit        | [SQLAlchemy 2.0](https://www.sqlalchemy.org/) (async)              |
+| Database                  | [PostgreSQL 16](https://www.postgresql.org/)                        |
+| DB driver                 | [asyncpg](https://magicstack.github.io/asyncpg/) (prod) · aiosqlite (tests) |
+| Testing                   | [pytest](https://docs.pytest.org/) · pytest-asyncio · [httpx](https://www.python-httpx.org/) |
+| Lint / format             | [Ruff](https://docs.astral.sh/ruff/)                                |
+| Dependency management      | [uv](https://docs.astral.sh/uv/)                                    |
+| Task runner               | [just](https://just.systems/)                                       |
+| Local infrastructure       | [Docker](https://www.docker.com/) + Docker Compose                  |
+
 ## Quick Start
 
 ```bash
@@ -108,13 +125,92 @@ to substitute SQLite for Postgres.
 
 ## API
 
-| Method   | Path                            | Description                          |
-| -------- | ------------------------------- | ------------------------------------ |
-| `POST`   | `/case-notes`                   | Create a tracking record             |
-| `GET`    | `/case-notes`                   | List all tracking records            |
-| `GET`    | `/case-notes/{tracking_id}`     | Fetch one tracking record            |
-| `PATCH`  | `/case-notes/{id}/location`     | Move a case note to a new location   |
-| `DELETE` | `/case-notes/{tracking_id}`     | Delete a tracking record             |
+| Method   | Path                          | Description                        | Success | Errors    |
+| -------- | ----------------------------- | ---------------------------------- | ------- | --------- |
+| `POST`   | `/case-notes`                 | Create a tracking record           | `201`   | `422`     |
+| `GET`    | `/case-notes`                 | List all tracking records          | `200`   | —         |
+| `GET`    | `/case-notes/{tracking_id}`   | Fetch one tracking record          | `200`   | `404`     |
+| `PATCH`  | `/case-notes/{id}/location`   | Move a case note to a new location | `200`   | `404` `422` |
+| `DELETE` | `/case-notes/{tracking_id}`   | Delete a tracking record           | `204`   | `404`     |
+| `GET`    | `/health`                     | Liveness probe                     | `200`   | —         |
+
+Response codes are mapped at the HTTP boundary: domain `InvalidCaseNoteError`
+becomes `422 Unprocessable Entity` (alongside Pydantic request validation), and
+`CaseNoteNotFoundError` becomes `404 Not Found`.
+
+### Interactive docs & schema
+
+| Endpoint        | Description                          |
+| --------------- | ------------------------------------ |
+| `/docs`         | Swagger UI (interactive API explorer) |
+| `/redoc`        | ReDoc API reference                  |
+| `/openapi.json` | Raw OpenAPI 3.1 schema               |
+
+Locally these are served at `http://localhost:8000/docs`,
+`http://localhost:8000/redoc`, and `http://localhost:8000/openapi.json`.
+
+## Exercising the API with curl
+
+With the server running (`just dev`):
+
+```bash
+# Health check
+curl http://localhost:8000/health
+
+# Create a tracking record (note the returned tracking_id)
+curl -X POST http://localhost:8000/case-notes \
+  -H "Content-Type: application/json" \
+  -d '{"hospital_number": "RX1234567", "current_location": "Medical Records Library"}'
+
+# List all tracking records
+curl http://localhost:8000/case-notes
+
+# Fetch a single record (replace <id> with a real tracking_id)
+curl http://localhost:8000/case-notes/<id>
+
+# Move a case note to a new location (and optionally change status)
+curl -X PATCH http://localhost:8000/case-notes/<id>/location \
+  -H "Content-Type: application/json" \
+  -d '{"current_location": "Ward 4", "status": "ON_LOAN"}'
+
+# Delete a tracking record (returns HTTP 204, no body)
+curl -X DELETE -i http://localhost:8000/case-notes/<id>
+```
+
+A full create → move → delete flow in one go:
+
+```bash
+ID=$(curl -s -X POST http://localhost:8000/case-notes \
+  -H "Content-Type: application/json" \
+  -d '{"hospital_number": "RX1234567", "current_location": "Medical Records Library"}' \
+  | python3 -c "import sys, json; print(json.load(sys.stdin)['tracking_id'])")
+
+curl -X PATCH "http://localhost:8000/case-notes/$ID/location" \
+  -H "Content-Type: application/json" \
+  -d '{"current_location": "Ward 4"}'
+
+curl -X DELETE -i "http://localhost:8000/case-notes/$ID"
+```
+
+## Configuration (`.env`)
+
+Settings are loaded by `app/config.py` via pydantic-settings. All variables use
+the `CASTNOTE_` prefix and can be set in the environment or in a local `.env`
+file (see [.env.example](.env.example)). Unknown variables are ignored.
+
+| Variable                | Default                                                            | Description                                                |
+| ----------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------- |
+| `CASTNOTE_DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/castnote`  | Async SQLAlchemy database URL (must use an async driver).  |
+| `CASTNOTE_ECHO_SQL`     | `false`                                                           | When `true`, logs every SQL statement (useful for debugging). |
+| `CASTNOTE_APP_TITLE`    | `NHS Case Notes Tracking API`                                     | Title shown in the OpenAPI docs.                           |
+
+Example `.env`:
+
+```dotenv
+CASTNOTE_DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/castnote
+CASTNOTE_ECHO_SQL=false
+CASTNOTE_APP_TITLE=NHS Case Notes Tracking API
+```
 
 ## Tooling
 
